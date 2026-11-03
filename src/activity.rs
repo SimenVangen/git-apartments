@@ -8,19 +8,22 @@ use crate::{Error, Rgb};
 
 /// The GraphQL query whose response [`Activity::from_graphql_json`] reads.
 ///
-/// It takes one variable, `$login`. The contribution calendar covers the
-/// past year and ends today; the languages come from the account's own
-/// public, non-fork repositories, the 100 most recently pushed.
+/// It takes three variables: `$login`, and `$from` and `$to`, the span of
+/// the contribution calendar (at most a year). [`year_range`](crate::year_range)
+/// gives the span of one calendar year. The languages come from the
+/// account's own public, non-fork repositories, the 100 most recently
+/// pushed.
 ///
 /// With the GitHub CLI:
 ///
 /// ```text
-/// gh api graphql -f query="$QUERY" -f login=octocat
+/// gh api graphql -f query="$QUERY" -f login=octocat \
+///   -f from=2026-01-01T00:00:00Z -f to=2026-12-31T23:59:59Z
 /// ```
-pub const QUERY: &str = r#"query($login: String!) {
+pub const QUERY: &str = r#"query($login: String!, $from: DateTime, $to: DateTime) {
   user(login: $login) {
     login
-    contributionsCollection {
+    contributionsCollection(from: $from, to: $to) {
       contributionCalendar {
         totalContributions
         weeks { contributionDays { date contributionCount } }
@@ -56,12 +59,12 @@ pub struct Language {
     pub bytes: u64,
 }
 
-/// A GitHub account's public activity over the past year.
+/// A GitHub account's public activity over the span it was fetched for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Activity {
     /// The account's login.
     pub login: String,
-    /// Contributions over the past year.
+    /// Contributions over that span.
     pub total_contributions: u32,
     /// The contribution calendar, oldest day first. The last day is today.
     pub days: Vec<Day>,

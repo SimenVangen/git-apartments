@@ -9,20 +9,22 @@ fn fixture(name: &str) -> String {
 }
 
 fn building(name: &str) -> Building {
-    Building::from_activity(&Activity::from_graphql_json(&fixture(name)).unwrap())
+    let activity = Activity::from_graphql_json(&fixture(name)).unwrap();
+    Building::for_year(&activity, 2026, "2026-11-03")
 }
 
 #[test]
-fn one_apartment_per_day_laid_out_like_the_calendar() {
-    let b = building("sparse.json");
+fn one_apartment_per_day_of_the_year() {
+    let b = building("this_year.json");
+    assert_eq!(b.year, 2026);
     assert_eq!(b.apartments.len(), 365);
     assert_eq!(b.total_contributions, 89);
-    assert_eq!(b.residents(), 34);
+    assert_eq!(b.residents(), 32);
 
-    // 2025-11-04 was a Tuesday, so the first window is on the third floor
+    // 2026-01-01 is a Thursday, so the first window is on the fifth floor
     // from the top, and each later day steps down a floor or across a week.
-    assert_eq!(b.apartments[0].date, "2025-11-04");
-    assert_eq!((b.apartments[0].week, b.apartments[0].floor), (0, 2));
+    assert_eq!(b.apartments[0].date, "2026-01-01");
+    assert_eq!((b.apartments[0].week, b.apartments[0].floor), (0, 4));
     for pair in b.apartments.windows(2) {
         let (a, n) = (&pair[0], &pair[1]);
         if a.floor == 6 {
@@ -31,12 +33,56 @@ fn one_apartment_per_day_laid_out_like_the_calendar() {
             assert_eq!((n.week, n.floor), (a.week, a.floor + 1));
         }
     }
+    assert_eq!(b.apartments[364].date, "2026-12-31");
     assert_eq!(b.weeks, 53);
 }
 
 #[test]
+fn the_rest_of_the_year_is_still_to_come() {
+    let b = building("this_year.json");
+    let today = b.today.unwrap();
+    assert_eq!(b.apartments[today].date, "2026-11-03");
+    for (i, a) in b.apartments.iter().enumerate() {
+        assert_eq!(a.upcoming, i > today, "{}", a.date);
+        if a.upcoming {
+            assert!(!a.occupied());
+        }
+    }
+}
+
+#[test]
+fn ten_days_in_a_row_are_ten_windows_in_a_row() {
+    let mut a = Activity::from_graphql_json(&fixture("this_year.json")).unwrap();
+    for d in a.days.iter_mut() {
+        d.count = u32::from(("2026-03-02".."2026-03-12").contains(&d.date.as_str()));
+    }
+    let b = Building::for_year(&a, 2026, "2026-11-03");
+    let lit: Vec<(usize, usize)> = b
+        .apartments
+        .iter()
+        .filter(|a| a.occupied())
+        .map(|a| (a.week, a.floor))
+        .collect();
+    // Monday March 2 to Wednesday March 11: down one column, then the next.
+    assert_eq!(lit.len(), 10);
+    assert_eq!(lit[0], (9, 1));
+    assert_eq!(lit[5], (9, 6));
+    assert_eq!(lit[6], (10, 0));
+    assert_eq!(lit[9], (10, 3));
+}
+
+#[test]
+fn a_past_year_works_too() {
+    let a = Activity::from_graphql_json(&fixture("this_year.json")).unwrap();
+    let b = Building::for_year(&a, 2025, "2026-11-03");
+    assert_eq!(b.apartments.len(), 365);
+    assert_eq!(b.today, None);
+    assert!(b.apartments.iter().all(|a| !a.upcoming && !a.occupied()));
+}
+
+#[test]
 fn lights_follow_contributions() {
-    let b = building("sparse.json");
+    let b = building("this_year.json");
     for a in &b.apartments {
         assert_eq!(a.occupied(), a.light > 0, "{}", a.date);
         assert!(a.light <= 4);
@@ -47,13 +93,13 @@ fn lights_follow_contributions() {
 
 #[test]
 fn recent_days_move_in() {
-    let b = building("sparse.json");
+    let b = building("this_year.json");
     let dates: Vec<&str> = b
         .arrivals
         .iter()
         .map(|&i| b.apartments[i].date.as_str())
         .collect();
-    assert_eq!(dates, ["2026-10-29", "2026-10-31", "2026-11-02"]);
+    assert_eq!(dates, ["2026-10-28", "2026-10-31", "2026-11-02"]);
 
     // Nothing in the last week: nobody moves in.
     assert!(building("quiet.json").arrivals.is_empty());
@@ -61,7 +107,7 @@ fn recent_days_move_in() {
 
 #[test]
 fn new_residents_light_up_during_the_loop() {
-    let b = building("sparse.json");
+    let b = building("this_year.json");
     let frames = render_frames(&b);
     assert_eq!(frames.len(), FRAMES);
     assert_eq!((frames[0].width, frames[0].height), (WIDTH, HEIGHT));
@@ -72,7 +118,7 @@ fn new_residents_light_up_during_the_loop() {
 
 #[test]
 fn coats_come_from_languages() {
-    let b = building("sparse.json");
+    let b = building("this_year.json");
     assert_eq!(b.coats[0], Rgb::hex(0x3572a5));
     assert_eq!(building("quiet.json").coats.len(), 3);
 }
@@ -97,7 +143,7 @@ fn gif_has_the_promised_shape() {
 
 #[test]
 fn the_same_account_draws_the_same_gif() {
-    let b = building("sparse.json");
+    let b = building("this_year.json");
     let (mut one, mut two) = (Vec::new(), Vec::new());
     render_gif(&b, 1, &mut one).unwrap();
     render_gif(&b, 1, &mut two).unwrap();

@@ -1,10 +1,12 @@
 //! Drawing the building, frame by frame.
 //!
-//! Every day of the year is a window: weeks run left to right and the days
-//! of the week are the floors, Sunday at the top, like GitHub's calendar.
-//! A day with contributions is an occupied apartment with its light on,
-//! brighter the more you contributed. Recent days' residents walk in
-//! carrying boxes, and their windows light up as they reach their floor.
+//! Every day of the year is a window: weeks run left to right from
+//! January and the days of the week are the floors, Sunday at the top,
+//! like GitHub's calendar. A day with contributions is an occupied
+//! apartment with its light on, brighter the more you contributed. Days
+//! still to come are dark, and today's window blinks until you contribute.
+//! Recent days' residents walk in carrying boxes, and their windows light
+//! up as they reach their floor.
 
 use std::io::Write;
 
@@ -50,6 +52,8 @@ const PARAPET: Rgb = Rgb::hex(0x3d4570);
 const SILL: Rgb = Rgb::hex(0x4a5380);
 const GLASS: Rgb = Rgb::hex(0x121630);
 const GLASS_HI: Rgb = Rgb::hex(0x252e55);
+const GLASS_UPCOMING: Rgb = Rgb::hex(0x0b0e1f);
+const TODAY: Rgb = Rgb::hex(0x5c4024);
 /// Window light, from barely on to the busiest days.
 const LIT: [Rgb; 5] = [
     GLASS,
@@ -288,7 +292,7 @@ fn draw_roof(f: &mut Frame, b: &Building, l: &Layout, t: i32) {
     f.set(ax, 8, if t % 20 < 10 { BEACON } else { BEACON_OFF });
 
     // The neon sign.
-    let text = format!("{} CONTRIBUTIONS", b.total_contributions);
+    let text = format!("{} CONTRIBUTIONS IN {}", b.total_contributions, b.year);
     let tw = font::width(&text, 2);
     let cx = l.x0 + l.width / 2;
     let (bx0, bx1, by0, by1) = (cx - tw / 2 - 4, cx + tw / 2 + 4, 4, 19);
@@ -370,9 +374,18 @@ fn draw_windows(f: &mut Frame, b: &Building, l: &Layout, people: &[Walker], t: i
         }
 
         if !lit {
-            f.rect(x, y, x + 2, y + 3, GLASS);
-            if h % 3 == 0 {
-                f.set(x, y, GLASS_HI);
+            if apt.upcoming {
+                // Days still to come: dark, waiting for a tenant.
+                f.rect(x, y, x + 2, y + 3, GLASS_UPCOMING);
+            } else if b.today == Some(i) && t % 24 < 12 {
+                // Today's apartment is free: its window blinks until you
+                // contribute.
+                f.rect(x, y, x + 2, y + 3, TODAY);
+            } else {
+                f.rect(x, y, x + 2, y + 3, GLASS);
+                if h % 3 == 0 {
+                    f.set(x, y, GLASS_HI);
+                }
             }
             continue;
         }

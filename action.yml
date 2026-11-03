@@ -1,5 +1,5 @@
 name: git-apartments
-description: Draw a pixel-art apartment building from a GitHub account's contributions, one window per day, as a looping GIF.
+description: Draw a pixel-art apartment building from a GitHub account's contributions this year, one window per day, as a looping GIF.
 author: SimenVangen
 branding:
   icon: home
@@ -24,7 +24,7 @@ outputs:
     description: The path of the GIF that was written.
     value: ${{ steps.draw.outputs.path }}
   summary:
-    description: 'A one-line description, such as "34 residents in 365 apartments, 89 contributions this year; moving in: 2026-11-02".'
+    description: 'A one-line description, such as "34 residents in 365 apartments, 89 contributions in 2026; moving in: 2026-11-02".'
     value: ${{ steps.draw.outputs.summary }}
 
 runs:

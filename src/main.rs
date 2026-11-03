@@ -34,6 +34,15 @@ struct Args {
     #[arg(long, value_name = "FILE", conflicts_with = "json")]
     save_json: Option<PathBuf>,
 
+    /// The year to draw. Defaults to this year.
+    #[arg(long)]
+    year: Option<i32>,
+
+    /// Treat this date (YYYY-MM-DD) as today, for previews. Defaults to
+    /// today's date in UTC.
+    #[arg(long, value_name = "DATE")]
+    today: Option<String>,
+
     /// Print the GraphQL query and exit.
     #[arg(long)]
     print_query: bool,
@@ -55,6 +64,14 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
+    let today = args.today.clone().unwrap_or_else(git_apartments::today_utc);
+    let this_year: i32 = today
+        .get(..4)
+        .and_then(|y| y.parse().ok())
+        .ok_or_else(|| format!("not a YYYY-MM-DD date: {today:?}"))?;
+    let year = args.year.unwrap_or(this_year);
+    let (from, to) = git_apartments::year_range(year);
+
     let json = match &args.json {
         Some(path) => fs::read_to_string(path)
             .map_err(|e| format!("could not read {}: {e}", path.display()))?,
@@ -70,6 +87,10 @@ fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
                 &format!("query={QUERY}"),
                 "-f",
                 &format!("login={login}"),
+                "-f",
+                &format!("from={from}"),
+                "-f",
+                &format!("to={to}"),
             ])?;
             if let Some(path) = &args.save_json {
                 fs::write(path, &json)?;
@@ -84,7 +105,7 @@ fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         }
         (e, _) => e,
     })?;
-    let building = Building::from_activity(&activity);
+    let building = Building::for_year(&activity, year, &today);
 
     let mut gif = Vec::new();
     git_apartments::render_gif(&building, args.scale, &mut gif)?;
@@ -99,11 +120,12 @@ fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         .map(|&i| building.apartments[i].date.as_str())
         .collect();
     println!(
-        "{}: {} residents in {} apartments, {} contributions this year; moving in: {}",
+        "{}: {} residents in {} apartments, {} contributions in {}; moving in: {}",
         building.login,
         building.residents(),
         building.apartments.len(),
         building.total_contributions,
+        building.year,
         if moving_in.is_empty() {
             "nobody this week".to_string()
         } else {
