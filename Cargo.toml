@@ -1,0 +1,38 @@
+[package]
+name = "git-apartments"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Draws a pixel-art apartment building from a GitHub account's contributions: one window per day, lit when you contributed."
+license = "MIT"
+repository = "https://github.com/SimenVangen/git-apartments"
+documentation = "https://docs.rs/git-apartments"
+readme = "README.md"
+keywords = ["github", "pixel-art", "gif", "readme", "contributions"]
+categories = ["command-line-utilities", "multimedia::images"]
+exclude = [".github/", "docs/gallery/"]
+
+[features]
+default = ["cli"]
+# The `git-apartments` command. Library users can turn it off with
+# `default-features = false` to skip the clap dependency.
+cli = ["dep:clap"]
+
+[[bin]]
+name = "git-apartments"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[[example]]
+name = "gallery"
+
+[dependencies]
+gif = "0.14"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"], optional = true }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

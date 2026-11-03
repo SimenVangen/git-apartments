@@ -1,0 +1,101 @@
+name: git-apartments
+description: Draw a pixel-art apartment building from a GitHub account's contributions, one window per day, as a looping GIF.
+author: SimenVangen
+branding:
+  icon: home
+  color: yellow
+
+inputs:
+  login:
+    description: The GitHub login to draw. Defaults to the repository's owner.
+    default: ${{ github.repository_owner }}
+  output:
+    description: Where to write the GIF, relative to the workspace.
+    default: apartments.gif
+  scale:
+    description: How many screen pixels each art pixel becomes (1–8). 3 gives a 900×312 GIF.
+    default: "3"
+  token:
+    description: Token for the GitHub API. The workflow's built-in token is enough for public activity.
+    default: ${{ github.token }}
+
+outputs:
+  path:
+    description: The path of the GIF that was written.
+    value: ${{ steps.draw.outputs.path }}
+  summary:
+    description: 'A one-line description, such as "34 residents in 365 apartments, 89 contributions this year; moving in: 2026-11-02".'
+    value: ${{ steps.draw.outputs.summary }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install git-apartments
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        bin="$RUNNER_TEMP/git-apartments/bin"
+        mkdir -p "$bin"
+
+        case "$RUNNER_OS/$RUNNER_ARCH" in
+          Linux/X64)   target=x86_64-unknown-linux-gnu ;;
+          Linux/ARM64) target=aarch64-unknown-linux-gnu ;;
+          macOS/ARM64) target=aarch64-apple-darwin ;;
+          *)           target="" ;;
+        esac
+
+        # When the action runs from a release tag (uses: owner/git-apartments@v0),
+        # GitHub checks it out under .../_actions/<owner>/<repo>/<ref>.
+        # Download that release's binary; fall back to building from source.
+        installed=false
+        case "$GITHUB_ACTION_PATH" in
+          */_actions/*/*/*)
+            ref="$(basename "$GITHUB_ACTION_PATH")"
+            repo="$(basename "$(dirname "$(dirname "$GITHUB_ACTION_PATH")")")/$(basename "$(dirname "$GITHUB_ACTION_PATH")")"
+            if [ -n "$target" ]; then
+              # A major tag such as v0 has no release of its own; use the
+              # newest v0.x.y release instead.
+              tag="$(gh release list --repo "$repo" --exclude-drafts --exclude-pre-releases \
+                       --json tagName --jq '.[].tagName' 2>/dev/null \
+                     | grep -E "^${ref}(\.|$)" | head -n 1 || true)"
+              if [ -n "$tag" ] && gh release download "$tag" --repo "$repo" \
+                   --pattern "git-apartments-${target}.tar.gz" --dir "$RUNNER_TEMP/git-apartments" --clobber; then
+                tar -xzf "$RUNNER_TEMP/git-apartments/git-apartments-${target}.tar.gz" -C "$bin"
+                echo "Using the git-apartments $tag release for $target."
+                installed=true
+              fi
+            fi
+            ;;
+        esac
+
+        if [ "$installed" = false ]; then
+          echo "No prebuilt binary for this runner and ref; building from source."
+          cargo build --release --locked \
+            --manifest-path "$GITHUB_ACTION_PATH/Cargo.toml" \
+            --target-dir "$RUNNER_TEMP/git-apartments/target"
+          cp "$RUNNER_TEMP/git-apartments/target/release/git-apartments" "$bin/"
+        fi
+        echo "$bin" >> "$GITHUB_PATH"
+
+    - name: Draw the building
+      id: draw
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        LOGIN: ${{ inputs.login }}
+        OUTPUT: ${{ inputs.output }}
+        SCALE: ${{ inputs.scale }}
+      run: |
+        set -euo pipefail
+        report="$(git-apartments "$LOGIN" --output "$OUTPUT" --scale "$SCALE")"
+        echo "$report"
+        summary="$(head -n 1 <<<"$report" | sed -E 's/^[^:]+: //')"
+        echo "path=$OUTPUT" >> "$GITHUB_OUTPUT"
+        echo "summary=$summary" >> "$GITHUB_OUTPUT"
+        {
+          echo "### 🏢 $LOGIN's apartment building"
+          echo
+          echo "$summary"
+        } >> "$GITHUB_STEP_SUMMARY"

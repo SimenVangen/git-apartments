@@ -1,0 +1,42 @@
+# Copy this to .github/workflows/apartments.yml in your profile repository
+# (the repository named after your username), then add the building to
+# its README.md:
+#
+#   ![My apartment building](assets/apartments.gif)
+#
+# The building is redrawn every night just after midnight UTC, so the day
+# that just ended gets its window. Run it by hand from the Actions tab the
+# first time.
+
+name: Apartments
+
+on:
+  schedule:
+    - cron: "11 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  draw:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: SimenVangen/git-apartments@v0
+        with:
+          output: assets/apartments.gif
+
+      - name: Commit the building
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/apartments.gif
+          if git diff --cached --quiet; then
+            echo "The building hasn't changed."
+          else
+            git commit -m "Redraw the apartment building"
+            git pull --rebase
+            git push
+          fi

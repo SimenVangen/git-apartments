@@ -1,0 +1,33 @@
+name: Something's wrong
+description: The building didn't draw, drew wrong, or the Action failed.
+labels: [bug]
+body:
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - The Action, in a profile workflow
+        - The command line
+        - The library
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The Action ref (such as v0), `git-apartments --version`, or the crate version.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, what you got, and any error output. The GIF helps.
+    validations:
+      required: true
+  - type: input
+    id: login
+    attributes:
+      label: Login
+      description: The GitHub account being drawn, if you're happy to share it.
